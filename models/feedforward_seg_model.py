@@ -21,7 +21,7 @@ class FeedForwardSegmentation(BaseModel):
         BaseModel.initialize(self, opts, **kwargs)
         self.isTrain = opts.isTrain
 
-        # define network input and output pars
+        # define network input and output parameters
         self.input = None
         self.target = None
         self.tensor_dim = opts.tensor_dim
@@ -31,7 +31,8 @@ class FeedForwardSegmentation(BaseModel):
                                in_channels=opts.input_nc, nonlocal_mode=opts.nonlocal_mode,
                                tensor_dim=opts.tensor_dim, feature_scale=opts.feature_scale,
                                attention_dsample=opts.attention_dsample)
-        if self.use_cuda: self.net = self.net.cuda()
+        if self.use_cuda: 
+            self.net = self.net.cuda()
 
         # load the model if a path is specified or it is in inference mode
         if not self.isTrain or opts.continue_train:
@@ -53,32 +54,36 @@ class FeedForwardSegmentation(BaseModel):
             self.optimizers.append(self.optimizer_S)
 
             # print the network details
-            # print the network details
             if kwargs.get('verbose', True):
-                print('Network is initialized')
+                print('✅ Network is initialized')
                 print_network(self.net)
 
     def set_scheduler(self, train_opt):
         for optimizer in self.optimizers:
             self.schedulers.append(get_scheduler(optimizer, train_opt))
-            print('Scheduler is added for optimiser {0}'.format(optimizer))
+            print('📌 Scheduler is added for optimizer {0}'.format(optimizer))
 
     def set_input(self, *inputs):
-        # self.input.resize_(inputs[0].size()).copy_(inputs[0])
         for idx, _input in enumerate(inputs):
-            # If it's a 5D array and 2D model then (B x C x H x W x Z) -> (BZ x C x H x W)
-            bs = _input.size()
-            if (self.tensor_dim == '2D') and (len(bs) > 4):
-                _input = _input.permute(0,4,1,2,3).contiguous().view(bs[0]*bs[4], bs[1], bs[2], bs[3])
-
-            # Define that it's a cuda array
             if idx == 0:
+                # ✅ Ensure shape is [B, 1, H, W] (not [B, 2, H, W])
+                if _input.shape[1] != 1:
+                    _input = _input[:, :1, :, :]  # Keep only 1 channel
                 self.input = _input.cuda() if self.use_cuda else _input
             elif idx == 1:
                 self.target = Variable(_input.cuda()) if self.use_cuda else Variable(_input)
-                assert self.input.size() == self.target.size()
+
+        print(f"✅ Debug: Final Input Shape = {self.input.shape}, Final Target Shape = {self.target.shape}")
+        assert self.input.size() == self.target.size(), \
+            f"❌ Shape Mismatch: Input {self.input.size()} vs Target {self.target.size()}"
 
     def forward(self, split):
+        """
+        Forward pass through the network.
+        """
+        # ✅ Debug Print Before Forward Pass
+        print(f"🚀 Forward Pass: Model Input Shape = {self.input.shape}")
+
         if split == 'train':
             self.prediction = self.net(Variable(self.input))
         elif split == 'test':
@@ -86,12 +91,18 @@ class FeedForwardSegmentation(BaseModel):
             # Apply a softmax and return a segmentation map
             self.logits = self.net.apply_argmax_softmax(self.prediction)
             self.pred_seg = self.logits.data.max(1)[1].unsqueeze(1)
-            
+
     def backward(self):
+        """
+        Computes the loss and performs backpropagation.
+        """
         self.loss_S = self.criterion(self.prediction, self.target)
         self.loss_S.backward()
 
     def optimize_parameters(self):
+        """
+        Optimizes the model parameters by performing a forward and backward pass.
+        """
         self.net.train()
         self.forward(split='train')
 
@@ -99,10 +110,14 @@ class FeedForwardSegmentation(BaseModel):
         self.backward()
         self.optimizer_S.step()
 
-    # This function updates the network parameters every "accumulate_iters"
     def optimize_parameters_accumulate_grd(self, iteration):
-        accumulate_iters = int(2)
-        if iteration == 0: self.optimizer_S.zero_grad()
+        """
+        This function updates the network parameters every "accumulate_iters" iterations.
+        """
+        accumulate_iters = 2
+        if iteration == 0: 
+            self.optimizer_S.zero_grad()
+
         self.net.train()
         self.forward(split='train')
         self.backward()
@@ -112,15 +127,24 @@ class FeedForwardSegmentation(BaseModel):
             self.optimizer_S.zero_grad()
 
     def test(self):
+        """
+        Runs inference on test data.
+        """
         self.net.eval()
         self.forward(split='test')
 
     def validate(self):
+        """
+        Runs validation on test data.
+        """
         self.net.eval()
         self.forward(split='test')
         self.loss_S = self.criterion(self.prediction, self.target)
 
     def get_segmentation_stats(self):
+        """
+        Computes segmentation metrics like accuracy and IoU.
+        """
         self.seg_scores, self.dice_score = segmentation_stats(self.prediction, self.target)
         seg_stats = [('Overall_Acc', self.seg_scores['overall_acc']), ('Mean_IOU', self.seg_scores['mean_iou'])]
         for class_id in range(self.dice_score.size):
@@ -128,20 +152,30 @@ class FeedForwardSegmentation(BaseModel):
         return OrderedDict(seg_stats)
 
     def get_current_errors(self):
-        return OrderedDict([('Seg_Loss', self.loss_S.data[0])
-                            ])
+        """
+        Returns current segmentation loss.
+        """
+        return OrderedDict([('Seg_Loss', self.loss_S.item())])
 
     def get_current_visuals(self):
+        """
+        Returns input image and segmentation output.
+        """
         inp_img = util.tensor2im(self.input, 'img')
         seg_img = util.tensor2im(self.pred_seg, 'lbl')
         return OrderedDict([('out_S', seg_img), ('inp_S', inp_img)])
 
     def get_feature_maps(self, layer_name, upscale):
+        """
+        Extracts feature maps from a given network layer.
+        """
         feature_extractor = HookBasedFeatureExtractor(self.net, layer_name, upscale)
         return feature_extractor.forward(Variable(self.input))
 
-    # returns the fp/bp times of the model
-    def get_fp_bp_time (self, size=None):
+    def get_fp_bp_time(self, size=None):
+        """
+        Returns the forward pass and backward pass time of the model.
+        """
         if size is None:
             size = (1, 1, 160, 160, 96)
 
@@ -153,4 +187,7 @@ class FeedForwardSegmentation(BaseModel):
         return fp/float(bsize), bp/float(bsize)
 
     def save(self, epoch_label):
+        """
+        Saves the trained model.
+        """
         self.save_network(self.net, 'S', epoch_label, self.gpu_ids)
