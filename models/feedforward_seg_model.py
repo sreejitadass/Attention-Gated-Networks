@@ -66,17 +66,23 @@ class FeedForwardSegmentation(BaseModel):
     def set_input(self, *inputs):
         for idx, _input in enumerate(inputs):
             if idx == 0:
-                # ✅ Ensure shape is [B, 1, H, W] (not [B, 2, H, W])
+                # ✅ Ensure shape is [B, 1, D, H, W] (not [B, 2, D, H, W])
                 if _input.shape[1] != 1:
-                    _input = _input[:, :1, :, :]  # Keep only 1 channel
+                    _input = _input[:, :1, :, :, :]  # Keep only 1 channel
                 self.input = _input.cuda() if self.use_cuda else _input
             elif idx == 1:
-                self.target = Variable(_input.cuda()) if self.use_cuda else Variable(_input)
+                # Ensure target shape matches input shape, removing extra channel if present
+                if _input.dim() == 5:  # Shape [B, 1, D, H, W]
+                    self.target = Variable(_input.cuda()) if self.use_cuda else Variable(_input)
+                elif _input.dim() == 6:  # Shape [B, 1, 1, D, H, W]
+                    self.target = Variable(_input.squeeze(2).cuda()) if self.use_cuda else Variable(_input.squeeze(2))
+                else:
+                    raise ValueError(f"Unexpected target shape: {_input.shape}")
 
         print(f"✅ Debug: Final Input Shape = {self.input.shape}, Final Target Shape = {self.target.shape}")
         assert self.input.size() == self.target.size(), \
             f"❌ Shape Mismatch: Input {self.input.size()} vs Target {self.target.size()}"
-
+        
     def forward(self, split):
         """
         Forward pass through the network.
@@ -177,7 +183,7 @@ class FeedForwardSegmentation(BaseModel):
         Returns the forward pass and backward pass time of the model.
         """
         if size is None:
-            size = (1, 1, 160, 160, 96)
+            size = (1, 1, 160, 160, 96)  # Updated to match expected shape
 
         inp_array = Variable(torch.zeros(*size)).cuda()
         out_array = Variable(torch.zeros(*size)).cuda()

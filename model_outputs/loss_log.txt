@@ -10,3 +10,10 @@
 ================ Training Loss (Sat Feb 22 13:36:52 2025) ================
 ================ Training Loss (Sat Feb 22 14:39:56 2025) ================
 ================ Training Loss (Sat Feb 22 14:47:05 2025) ================
+================ Training Loss (Sat Feb 22 22:04:05 2025) ================
+================ Training Loss (Sat Feb 22 22:10:59 2025) ================
+================ Training Loss (Sat Feb 22 22:16:13 2025) ================
+================ Training Loss (Sat Feb 22 22:20:58 2025) ================
+(epoch: 0, split: train) Seg_Loss: 0.903 
+================ Training Loss (Sat Feb 22 22:27:55 2025) ================
+(epoch: 0, split: train) Seg_Loss: 0.985 
