@@ -17,3 +17,6 @@
 (epoch: 0, split: train) Seg_Loss: 0.903 
 ================ Training Loss (Sat Feb 22 22:27:55 2025) ================
 (epoch: 0, split: train) Seg_Loss: 0.985 
+================ Training Loss (Sun Feb 23 10:00:04 2025) ================
+================ Training Loss (Sun Feb 23 10:02:00 2025) ================
+(epoch: 0, split: train) Seg_Loss: 0.960 
